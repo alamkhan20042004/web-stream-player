@@ -3,173 +3,166 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Referrer tag zaroori hai taake browser embedding ko block na kare -->
     <meta name="referrer" content="origin-when-cross-origin">
-    
-    <title>Live Stream Player with Channels</title>
+    <title>Live Stream Player - Cloud Synced</title>
     
     <style>
-        /* Basic Reset aur Dark Theme */
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #121212;
-            color: #ffffff;
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-
-        /* Top bar for adding new streams */
-        .add-stream-container {
-            background-color: #1e1e1e;
-            padding: 15px 20px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            border-bottom: 1px solid #333;
-        }
-
-        .add-stream-container input {
-            padding: 8px 12px;
-            background: #2a2a2a;
-            border: 1px solid #444;
-            color: white;
-            border-radius: 4px;
-            outline: none;
-        }
-
-        .add-stream-container input::placeholder {
-            color: #aaa;
-        }
-
-        .add-btn {
-            padding: 8px 16px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: 0.2s;
-        }
-
-        .add-btn:hover {
-            background-color: #0056b3;
-        }
-
-        /* Channel List Buttons */
-        .channel-list {
-            padding: 15px 20px;
-            background-color: #181818;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .channel-btn {
-            padding: 8px 16px;
-            background-color: #333;
-            color: white;
-            border: 1px solid #444;
-            border-radius: 20px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .channel-btn:hover {
-            background-color: #444;
-            border-color: #666;
-        }
-
-        .channel-btn.active {
-            background-color: #e50914;
-            border-color: #e50914;
-            font-weight: bold;
-        }
-
-        /* Iframe player container */
-        .player-container {
-            flex: 1;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: #000;
-        }
-
-        iframe {
-            width: 100%;
-            height: 100%;
-            max-width: 1280px; /* Optional: limits max width for ultra-wide screens */
-            border: none;
-        }
+        body { margin: 0; padding: 0; background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+        .add-stream-container { background-color: #1e1e1e; padding: 15px 20px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid #333; flex-wrap: wrap; }
+        .add-stream-container input { padding: 8px 12px; background: #2a2a2a; border: 1px solid #444; color: white; border-radius: 4px; outline: none; }
+        .add-btn { padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .add-btn:hover { background-color: #0056b3; }
+        .add-btn:disabled { background-color: #555; cursor: not-allowed; }
+        .channel-list { padding: 15px 20px; background-color: #181818; display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; }
+        .channel-btn { padding: 8px 16px; background-color: #333; color: white; border: 1px solid #444; border-radius: 20px; cursor: pointer; }
+        .channel-btn:hover { background-color: #444; border-color: #666; }
+        .channel-btn.active { background-color: #e50914; border-color: #e50914; font-weight: bold; }
+        .player-container { flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; background: #000; }
+        iframe { width: 100%; height: 100%; border: none; }
+        .status-text { color: #aaa; font-size: 14px; margin-left: 10px; }
     </style>
 </head>
 <body>
 
-    <!-- Naya Iframe add karne ka form -->
     <div class="add-stream-container">
         <span>➕ Add Channel:</span>
-        <input type="text" id="streamName" placeholder="Channel Name (e.g. Sports HD)">
-        <input type="text" id="streamUrl" placeholder="Iframe Link (e.g. https://...)">
-        <button class="add-btn" onclick="addNewStream()">Add to List</button>
+        <input type="text" id="streamName" placeholder="Channel Name">
+        <input type="text" id="streamUrl" placeholder="Iframe Link">
+        <button id="saveBtn" class="add-btn" onclick="addNewStream()">Add to Cloud</button>
+        <span id="statusMsg" class="status-text">Fetching channels from cloud...</span>
     </div>
 
-    <!-- Channels ki list jahan buttons show honge -->
     <div class="channel-list" id="channelList">
-        <!-- Default button -->
-        <button class="channel-btn active" onclick="changeStream(this, 'https://embedhd.org/source/fetch.php?hd=71')">Channel HD 71</button>
-    </div>
+        </div>
 
-    <!-- Main Player -->
     <div class="player-container">
-        <iframe id="mainPlayer" src="https://embedhd.org/source/fetch.php?hd=71" allowfullscreen allow="encrypted-media; picture-in-picture; fullscreen"></iframe>
+        <iframe id="mainPlayer" src="" allowfullscreen allow="encrypted-media; picture-in-picture; fullscreen"></iframe>
     </div>
 
     <script>
-        // Stream change karne ka function
-        function changeStream(buttonElement, url) {
-            // Player ka link change karo
-            document.getElementById('mainPlayer').src = url;
+        // YAHAN APNI JSONBIN DETAILS DAALEIN
+        const BIN_ID = 'TUMHARI_BIN_ID_YAHAN'; 
+        const API_KEY = 'TUMHARI_API_KEY_YAHAN';
+        
+        let channels = [];
 
-            // Purane active button se color hatao
+        // 1. Page khulte hi Cloud se data load karna
+        window.onload = async function() {
+            try {
+                const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': API_KEY }
+                });
+                const data = await response.json();
+                channels = data.record; // Cloud wali list ko array mein daal diya
+                
+                document.getElementById('statusMsg').textContent = "Channels Loaded ✅";
+                renderChannels();
+                
+                if(channels.length > 0) {
+                    document.getElementById('mainPlayer').src = channels[0].url;
+                }
+            } catch (error) {
+                document.getElementById('statusMsg').textContent = "Error loading data ❌";
+                console.error(error);
+            }
+        };
+
+        // 2. Screen par buttons lagana
+        function renderChannels() {
+            const listDiv = document.getElementById('channelList');
+            listDiv.innerHTML = ''; 
+
+            channels.forEach((ch, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'channel-btn';
+                if (index === 0) btn.classList.add('active');
+                
+                btn.textContent = ch.name;
+                btn.onclick = function() {
+                    changeStream(this, ch.url);
+                };
+                listDiv.appendChild(btn);
+            });
+        }
+
+        // 3. Iframe change karna
+        function changeStream(buttonElement, url) {
+            document.getElementById('mainPlayer').src = url;
             const allButtons = document.querySelectorAll('.channel-btn');
             allButtons.forEach(btn => btn.classList.remove('active'));
-
-            // Naye button ko active color do
             buttonElement.classList.add('active');
         }
 
-        // Naya stream button add karne ka function
-        function addNewStream() {
+        // 4. Naya channel add karna aur Cloud par Write karna
+        async function addNewStream() {
             const nameInput = document.getElementById('streamName').value;
             const urlInput = document.getElementById('streamUrl').value;
 
             if (nameInput === '' || urlInput === '') {
-                alert('Bhai, Channel Name aur Link dono enter karo!');
+                alert('Details enter karein!');
                 return;
             }
 
-            // Naya button create karo
-            const newBtn = document.createElement('button');
-            newBtn.className = 'channel-btn';
-            newBtn.textContent = nameInput;
+            // Naya channel array mein daala
+            channels.push({ name: nameInput, url: urlInput });
             
-            // Button click par stream change ho
-            newBtn.onclick = function() {
-                changeStream(this, urlInput);
-            };
+            const btn = document.getElementById('saveBtn');
+            const status = document.getElementById('statusMsg');
+            
+            btn.disabled = true;
+            btn.textContent = "Saving...";
+            status.textContent = "Updating cloud data...";
 
-            // List mein add karo
-            document.getElementById('channelList').appendChild(newBtn);
+            try {
+                // Cloud (JSONBin) par data Update kar rahe hain
+                await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': API_KEY
+                    },
+                    body: JSON.stringify(channels)
+                });
 
-            // Inputs ko clear karo
-            document.getElementById('streamName').value = '';
-            document.getElementById('streamUrl').value = '';
+                status.textContent = "Saved to Cloud ✅";
+                renderChannels(); // Screen refresh
+                
+                document.getElementById('streamName').value = '';
+                document.getElementById('streamUrl').value = '';
+            } catch (error) {
+                status.textContent = "Failed to save ❌";
+                console.error(error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Add to Cloud";
+            }
         }
     </script>
-
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
