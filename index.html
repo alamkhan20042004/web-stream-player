@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="origin-when-cross-origin">
-    <title>Live Stream Player - Smart Sync</title>
+    <title>Live Stream Player - Unique URLs</title>
     
     <style>
         body { margin: 0; padding: 0; background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; }
@@ -60,21 +60,40 @@
         let channels = [];
         let activeIndex = 0;
 
-        // 1. Page Load par LocalStorage se data uthana (0 API limits used)
+        // 1. Page Load par Data lana
         window.onload = function() {
             const localData = localStorage.getItem('mySavedChannels');
             if (localData) {
                 channels = JSON.parse(localData);
                 document.getElementById('statusMsg').textContent = "Loaded from Local Device 📱";
                 renderChannels();
-                if(channels.length > 0) playStream(0);
+                checkUrlAndPlay(); // URL check karke play karega
             } else {
-                // Agar device mein kuch save nahi toh pehli dafa cloud se le aao
                 syncFromCloud();
             }
         };
 
-        // 2. Manual Cloud se Fetch Karna (Jab Sync button dabega)
+        // 2. URL Check karna aur specific channel play karna
+        function checkUrlAndPlay() {
+            if (channels.length === 0) return;
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetChannelName = urlParams.get('ch'); // URL se '?ch=Naam' uthayega
+            
+            let targetIndex = 0; // Default pehla channel
+            
+            if (targetChannelName) {
+                // Agar URL mein koi channel hai, toh usko list mein dhoondo
+                const foundIndex = channels.findIndex(c => c.name === targetChannelName);
+                if (foundIndex !== -1) {
+                    targetIndex = foundIndex; // Mil gaya toh index update kar do
+                }
+            }
+            
+            playStream(targetIndex);
+        }
+
+        // 3. Cloud se Fetch
         async function syncFromCloud() {
             const status = document.getElementById('statusMsg');
             const syncBtn = document.getElementById('syncBtn');
@@ -88,12 +107,11 @@
                 const data = await response.json();
                 channels = data.record;
                 
-                // Cloud ka data local mein save kar lo taake agli baar fetch na karna pare
                 localStorage.setItem('mySavedChannels', JSON.stringify(channels));
                 
                 status.textContent = "Cloud Sync Complete ✅";
                 renderChannels();
-                if(channels.length > 0) playStream(0);
+                checkUrlAndPlay(); // Sync hone ke baad URL check karega
             } catch (error) {
                 status.textContent = "Sync Error ❌";
                 console.error(error);
@@ -102,11 +120,9 @@
             }
         }
 
-        // 3. Local aur Cloud dono par save karna (Add/Edit/Delete ke waqt)
+        // 4. Data Save Karna
         async function saveData() {
             const status = document.getElementById('statusMsg');
-            
-            // Fauran local device mein save kar do (instant speed ke liye)
             localStorage.setItem('mySavedChannels', JSON.stringify(channels));
             
             status.textContent = "Updating Cloud... ⏳";
@@ -126,7 +142,7 @@
             }
         }
 
-        // 4. UI Render aur Play Functions
+        // 5. Render Channels
         function renderChannels() {
             const listDiv = document.getElementById('channelList');
             listDiv.innerHTML = ''; 
@@ -158,25 +174,28 @@
             });
         }
 
+        // 6. Play Stream & Update URL Uniquely
         function playStream(index) {
             activeIndex = index;
             document.getElementById('mainPlayer').src = channels[index].url;
             renderChannels(); 
+            
+            // Yahan URL uniquely update ho raha hai (e.g. ?ch=ChannelName)
+            const safeName = encodeURIComponent(channels[index].name);
+            const newUrl = window.location.pathname + '?ch=' + safeName;
+            window.history.pushState(null, '', newUrl);
         }
 
-        // 5. Actions (Add, Edit, Delete)
+        // 7. Actions (Add, Edit, Delete)
         function addNewStream() {
             const nameInput = document.getElementById('streamName').value;
             const urlInput = document.getElementById('streamUrl').value;
-
             if (nameInput === '' || urlInput === '') return alert('Details enter karein!');
-
             channels.push({ name: nameInput, url: urlInput });
             document.getElementById('streamName').value = '';
             document.getElementById('streamUrl').value = '';
-            
             renderChannels();
-            saveData(); // Save to local + cloud
+            saveData(); 
         }
 
         function editStream(index) {
@@ -184,11 +203,10 @@
             if (newName === null) return; 
             const newUrl = prompt("Naya Iframe Link:", channels[index].url);
             if (newUrl === null) return;
-
             if (newName.trim() !== '' && newUrl.trim() !== '') {
                 channels[index] = { name: newName, url: newUrl };
                 renderChannels();
-                saveData(); // Save to local + cloud
+                saveData(); 
                 if (index === activeIndex) playStream(index);
             }
         }
@@ -198,11 +216,11 @@
                 channels.splice(index, 1);
                 if (index === activeIndex) {
                     activeIndex = 0; 
-                    document.getElementById('mainPlayer').src = channels.length > 0 ? channels[0].url : "";
+                    if(channels.length > 0) playStream(0);
+                    else document.getElementById('mainPlayer').src = "";
                 } else if (index < activeIndex) activeIndex--;
-                
                 renderChannels();
-                saveData(); // Save to local + cloud
+                saveData(); 
             }
         }
     </script>
